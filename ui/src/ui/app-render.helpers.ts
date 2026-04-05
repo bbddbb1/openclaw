@@ -447,7 +447,7 @@ export function renderChatMobileToggle(state: AppViewState) {
                         <option
                           value=${opt.key}
                           title=${opt.title}
-                          ?selected=${opt.key === state.sessionKey}
+                          .selected=${live(opt.key === state.sessionKey)}
                         >
                           ${opt.label}
                         </option>
