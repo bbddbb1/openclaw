@@ -75,6 +75,7 @@ import type {
   SkillMessage,
 } from "./controllers/skills.ts";
 import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway.ts";
+import { GatewayRequestError } from "./gateway.ts";
 import type { Tab } from "./navigation.ts";
 import {
   buildAgentMainSessionKey,
@@ -120,6 +121,19 @@ declare global {
 }
 
 const bootAssistantIdentity = normalizeAssistantIdentity({});
+
+export function shouldUseOptimisticNewSessionFallback(error: unknown): boolean {
+  if (!(error instanceof GatewayRequestError)) {
+    return true;
+  }
+  if (error.gatewayCode === "UNAVAILABLE" || error.gatewayCode === "TIMEOUT") {
+    return true;
+  }
+  if (error.gatewayCode !== "INVALID_REQUEST") {
+    return false;
+  }
+  return normalizeLowercaseStringOrEmpty(error.message).includes("unknown method");
+}
 
 function resolveOnboardingMode(): boolean {
   if (!window.location.search) {
@@ -811,9 +825,19 @@ export class OpenClawApp extends LitElement {
           switchChatSession(this as Parameters<typeof switchChatSession>[0], result.key);
           return;
         }
-      } catch {
-        // fall through to optimistic local switch when RPC fails
+      } catch (error) {
+        if (shouldUseOptimisticNewSessionFallback(error)) {
+          switchChatSession(this as Parameters<typeof switchChatSession>[0], newKey);
+          return;
+        }
+        this.lastError =
+          error instanceof Error
+            ? `Failed to create session: ${error.message}`
+            : "Failed to create session";
+        return;
       }
+      this.lastError = "Failed to create session";
+      return;
     }
     switchChatSession(this as Parameters<typeof switchChatSession>[0], newKey);
   }
