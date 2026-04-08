@@ -79,6 +79,7 @@ import type { Tab } from "./navigation.ts";
 import {
   buildAgentMainSessionKey,
   buildDashboardSessionMainKey,
+  parseAgentSessionKey,
   resolveAgentIdFromSessionKey,
 } from "./session-key.ts";
 import type { SidebarContent } from "./sidebar-content.ts";
@@ -791,8 +792,8 @@ export class OpenClawApp extends LitElement {
     }
     this.newSessionModalOpen = false;
     this.newSessionName = "";
-    const agentId =
-      resolveAgentIdFromSessionKey(this.sessionKey) || this.assistantAgentId || "main";
+    const sessionAgentId = parseAgentSessionKey(this.sessionKey)?.agentId;
+    const agentId = sessionAgentId ?? this.assistantAgentId ?? "main";
     const newKey = buildAgentMainSessionKey({
       agentId,
       mainKey: buildDashboardSessionMainKey({
