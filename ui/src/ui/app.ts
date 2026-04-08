@@ -1,6 +1,5 @@
 import { LitElement } from "lit";
 import { customElement, state } from "lit/decorators.js";
-import { resolveAgentIdFromSessionKey } from "../../../src/routing/session-key.js";
 import { i18n, I18nController, isSupportedLocale } from "../i18n/index.ts";
 import {
   handleChannelConfigReload as handleChannelConfigReloadInternal,
@@ -77,7 +76,11 @@ import type {
 } from "./controllers/skills.ts";
 import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway.ts";
 import type { Tab } from "./navigation.ts";
-import { buildAgentMainSessionKey, resolveAgentIdFromSessionKey } from "./session-key.ts";
+import {
+  buildAgentMainSessionKey,
+  buildDashboardSessionMainKey,
+  resolveAgentIdFromSessionKey,
+} from "./session-key.ts";
 import type { SidebarContent } from "./sidebar-content.ts";
 import { loadSettings, type UiSettings } from "./storage.ts";
 import { VALID_THEME_NAMES, type ResolvedTheme, type ThemeMode, type ThemeName } from "./theme.ts";
@@ -783,16 +786,22 @@ export class OpenClawApp extends LitElement {
 
   async handleNewSessionConfirm() {
     const name = this.newSessionName.trim();
+    if (!name) {
+      return;
+    }
     this.newSessionModalOpen = false;
     this.newSessionName = "";
-    if (name) {
-      const agentId = this.agentsSelectedId ?? this.assistantAgentId ?? "main";
-      const sessionName = name.toLowerCase().replace(/\s+/g, "-");
-      const newKey = buildAgentMainSessionKey({
-        agentId,
-        mainKey: `dashboard:${sessionName}`,
-      });
-      if (this.client && this.connected) {
+    const agentId =
+      resolveAgentIdFromSessionKey(this.sessionKey) || this.assistantAgentId || "main";
+    const newKey = buildAgentMainSessionKey({
+      agentId,
+      mainKey: buildDashboardSessionMainKey({
+        name,
+        uniqueId: generateUUID(),
+      }),
+    });
+    if (this.client && this.connected) {
+      try {
         const result = (await this.client.request("sessions.create", { key: newKey })) as {
           ok: boolean;
           key?: string;
@@ -801,9 +810,11 @@ export class OpenClawApp extends LitElement {
           switchChatSession(this as Parameters<typeof switchChatSession>[0], result.key);
           return;
         }
+      } catch {
+        // fall through to optimistic local switch when RPC fails
       }
-      switchChatSession(this as Parameters<typeof switchChatSession>[0], newKey);
     }
+    switchChatSession(this as Parameters<typeof switchChatSession>[0], newKey);
   }
 
   handleNewSessionCancel() {
