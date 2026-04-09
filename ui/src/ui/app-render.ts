@@ -138,6 +138,7 @@ import { renderCommandPalette } from "./views/command-palette.ts";
 import { getPresetById } from "./views/config-presets.ts";
 import { renderQuickSettings, type QuickSettingsChannel } from "./views/config-quick.ts";
 import { renderConfig, type ConfigProps } from "./views/config.ts";
+import { renderDreamingRestartConfirmation } from "./views/dreaming-restart-confirmation.ts";
 import {
   renderCronQuickCreate,
   createDefaultDraft,
@@ -738,16 +739,40 @@ export function renderApp(state: AppViewState) {
     };
   };
   const applyDreamingEnabled = (enabled: boolean) => {
-    if (state.dreamingModeSaving || dreamingOn === enabled) {
+    if (state.dreamingModeSaving || state.dreamingRestartConfirmLoading || dreamingOn === enabled) {
+      return;
+    }
+    state.dreamingPendingEnabled = enabled;
+    state.dreamingRestartConfirmOpen = true;
+    state.dreamingStatusError = null;
+  };
+  const cancelDreamingRestart = () => {
+    if (state.dreamingRestartConfirmLoading) {
+      return;
+    }
+    state.dreamingRestartConfirmOpen = false;
+    state.dreamingPendingEnabled = null;
+  };
+  const confirmDreamingRestart = () => {
+    const enabled = state.dreamingPendingEnabled;
+    if (enabled == null || state.dreamingRestartConfirmLoading) {
       return;
     }
     void (async () => {
-      const updated = await updateDreamingEnabled(state, enabled);
-      if (!updated) {
-        return;
+      state.dreamingRestartConfirmLoading = true;
+      state.dreamingStatusError = null;
+      try {
+        const updated = await updateDreamingEnabled(state, enabled);
+        if (!updated) {
+          return;
+        }
+        await loadConfig(state);
+        await loadDreamingStatus(state);
+        state.dreamingRestartConfirmOpen = false;
+        state.dreamingPendingEnabled = null;
+      } finally {
+        state.dreamingRestartConfirmLoading = false;
       }
-      await loadConfig(state);
-      await loadDreamingStatus(state);
     })();
   };
   const basePath = normalizeBasePath(state.basePath ?? "");
@@ -2491,7 +2516,15 @@ export function renderApp(state: AppViewState) {
             })
           : nothing}
       </main>
-      ${renderExecApprovalPrompt(state)} ${renderGatewayUrlConfirmation(state)} ${nothing}
+      ${renderExecApprovalPrompt(state)} ${renderGatewayUrlConfirmation(state)}
+      ${renderDreamingRestartConfirmation({
+        open: state.dreamingRestartConfirmOpen,
+        loading: state.dreamingRestartConfirmLoading,
+        onConfirm: confirmDreamingRestart,
+        onCancel: cancelDreamingRestart,
+        error: state.dreamingStatusError,
+      })}
+      ${nothing}
     </div>
   `;
 }
