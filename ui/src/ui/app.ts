@@ -80,6 +80,7 @@ import type { Tab } from "./navigation.ts";
 import {
   buildAgentMainSessionKey,
   buildDashboardSessionMainKey,
+  normalizeAgentId,
   parseAgentSessionKey,
   resolveAgentIdFromSessionKey,
 } from "./session-key.ts";
@@ -126,9 +127,6 @@ export function shouldUseOptimisticNewSessionFallback(error: unknown): boolean {
   if (!(error instanceof GatewayRequestError)) {
     return true;
   }
-  if (error.gatewayCode === "UNAVAILABLE" || error.gatewayCode === "TIMEOUT") {
-    return true;
-  }
   if (error.gatewayCode !== "INVALID_REQUEST") {
     return false;
   }
@@ -140,20 +138,21 @@ export function resolveNewSessionAgentId(params: {
   sessionsResult: OpenClawApp["sessionsResult"];
   assistantAgentId: string | null;
 }): string | null {
+  const scopedSessionAgentId = parseAgentSessionKey(params.sessionKey)?.agentId;
+  const normalizedScopedSessionAgentId = scopedSessionAgentId
+    ? normalizeAgentId(scopedSessionAgentId)
+    : null;
   const activeSessionExists =
     params.sessionsResult?.sessions?.some((row) => row.key === params.sessionKey) ?? false;
-  const sessionAgentId = activeSessionExists
-    ? parseAgentSessionKey(params.sessionKey)?.agentId
-    : null;
+  const sessionAgentId = activeSessionExists ? normalizedScopedSessionAgentId : null;
   if (sessionAgentId) {
     return sessionAgentId;
   }
-  if (params.assistantAgentId) {
-    return params.assistantAgentId;
-  }
-  const scopedSessionAgentId = parseAgentSessionKey(params.sessionKey)?.agentId;
-  if (scopedSessionAgentId && scopedSessionAgentId !== "main") {
+  if (normalizedScopedSessionAgentId && normalizedScopedSessionAgentId !== "main") {
     return null;
+  }
+  if (params.assistantAgentId) {
+    return normalizeAgentId(params.assistantAgentId);
   }
   return "main";
 }

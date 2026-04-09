@@ -26,12 +26,12 @@ describe("shouldUseOptimisticNewSessionFallback", () => {
     expect(shouldUseOptimisticNewSessionFallback(new Error("gateway not connected"))).toBe(true);
   });
 
-  it("allows fallback for unavailable gateway responses", () => {
+  it("rejects fallback for unavailable gateway responses", () => {
     const error = new GatewayRequestError({
       code: "UNAVAILABLE",
       message: "temporary failure",
     });
-    expect(shouldUseOptimisticNewSessionFallback(error)).toBe(true);
+    expect(shouldUseOptimisticNewSessionFallback(error)).toBe(false);
   });
 
   it("allows fallback for compatibility unknown-method failures", () => {
@@ -62,14 +62,24 @@ describe("resolveNewSessionAgentId", () => {
     expect(agentId).toBe("ops");
   });
 
-  it("ignores URL-injected unknown session keys and falls back to assistant agent", () => {
+  it("normalizes agent id from an active server-known session key", () => {
+    const agentId = resolveNewSessionAgentId({
+      sessionKey: "agent:ops$$:dashboard:abc",
+      sessionsResult: makeSessionsResult(["agent:ops$$:dashboard:abc"]),
+      assistantAgentId: "main",
+    });
+
+    expect(agentId).toBe("ops");
+  });
+
+  it("ignores URL-injected unknown non-main keys and waits for trusted context", () => {
     const agentId = resolveNewSessionAgentId({
       sessionKey: "agent:victim:dashboard:evil",
       sessionsResult: makeSessionsResult(["agent:trusted:main"]),
       assistantAgentId: "trusted",
     });
 
-    expect(agentId).toBe("trusted");
+    expect(agentId).toBeNull();
   });
 
   it("falls back to main when no trusted source is available", () => {
@@ -87,6 +97,16 @@ describe("resolveNewSessionAgentId", () => {
       sessionKey: "agent:ops:dashboard:pending",
       sessionsResult: null,
       assistantAgentId: null,
+    });
+
+    expect(agentId).toBeNull();
+  });
+
+  it("defers assistant fallback when current key is an untrusted non-main scoped key", () => {
+    const agentId = resolveNewSessionAgentId({
+      sessionKey: "agent:ops:dashboard:pending",
+      sessionsResult: null,
+      assistantAgentId: "trusted",
     });
 
     expect(agentId).toBeNull();
