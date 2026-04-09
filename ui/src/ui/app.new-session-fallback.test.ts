@@ -92,6 +92,16 @@ describe("resolveNewSessionAgentId", () => {
     expect(agentId).toBe("main");
   });
 
+  it("does not use assistant fallback for unscoped/main keys", () => {
+    const agentId = resolveNewSessionAgentId({
+      sessionKey: "main",
+      sessionsResult: null,
+      assistantAgentId: "ops",
+    });
+
+    expect(agentId).toBe("main");
+  });
+
   it("waits for trusted context when active key is scoped to a non-main agent", () => {
     const agentId = resolveNewSessionAgentId({
       sessionKey: "agent:ops:dashboard:pending",

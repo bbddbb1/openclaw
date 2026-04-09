@@ -151,9 +151,6 @@ export function resolveNewSessionAgentId(params: {
   if (normalizedScopedSessionAgentId && normalizedScopedSessionAgentId !== "main") {
     return null;
   }
-  if (params.assistantAgentId) {
-    return normalizeAgentId(params.assistantAgentId);
-  }
   return "main";
 }
 
