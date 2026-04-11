@@ -69,6 +69,7 @@ import type {
 } from "./controllers/dreaming.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
+import { loadSessions as loadSessionsInternal } from "./controllers/sessions.ts";
 import type {
   ClawHubSearchResult,
   ClawHubSkillDetail,
@@ -823,11 +824,19 @@ export class OpenClawApp extends LitElement {
     if (!name) {
       return;
     }
-    const agentId = resolveNewSessionAgentId({
+    let agentId = resolveNewSessionAgentId({
       sessionKey: this.sessionKey,
       sessionsResult: this.sessionsResult,
       assistantAgentId: this.assistantAgentId,
     });
+    if (!agentId && !this.sessionsResult && this.client && this.connected) {
+      await loadSessionsInternal(this as Parameters<typeof loadSessionsInternal>[0]);
+      agentId = resolveNewSessionAgentId({
+        sessionKey: this.sessionKey,
+        sessionsResult: this.sessionsResult,
+        assistantAgentId: this.assistantAgentId,
+      });
+    }
     if (!agentId) {
       this.lastError = "Still loading agent context. Try again in a moment.";
       return;
