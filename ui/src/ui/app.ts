@@ -87,6 +87,7 @@ import {
 } from "./session-key.ts";
 import type { SidebarContent } from "./sidebar-content.ts";
 import { loadSettings, type UiSettings } from "./storage.ts";
+import { normalizeLowercaseStringOrEmpty } from "./string-coerce.ts";
 import { VALID_THEME_NAMES, type ResolvedTheme, type ThemeMode, type ThemeName } from "./theme.ts";
 import type {
   AgentsListResult,
@@ -850,35 +851,36 @@ export class OpenClawApp extends LitElement {
         uniqueId: generateUUID(),
       }),
     });
-    if (this.client && this.connected) {
-      try {
-        const result = (await this.client.request("sessions.create", {
-          key: newKey,
-          agentId,
-          label: name,
-        })) as {
-          ok: boolean;
-          key?: string;
-        };
-        if (result?.ok && result.key) {
-          switchChatSession(this as Parameters<typeof switchChatSession>[0], result.key);
-          return;
-        }
-      } catch (error) {
-        if (shouldUseOptimisticNewSessionFallback(error)) {
-          switchChatSession(this as Parameters<typeof switchChatSession>[0], newKey);
-          return;
-        }
-        this.lastError =
-          error instanceof Error
-            ? `Failed to create session: ${error.message}`
-            : "Failed to create session";
-        return;
-      }
-      this.lastError = "Failed to create session";
+    if (!this.client || !this.connected) {
+      this.lastError = "Disconnected before creating session. Reconnect and try again.";
       return;
     }
-    switchChatSession(this as Parameters<typeof switchChatSession>[0], newKey);
+    try {
+      const result = (await this.client.request("sessions.create", {
+        key: newKey,
+        agentId,
+        label: name,
+      })) as {
+        ok: boolean;
+        key?: string;
+      };
+      if (result?.ok && result.key) {
+        switchChatSession(this as Parameters<typeof switchChatSession>[0], result.key);
+        return;
+      }
+    } catch (error) {
+      if (shouldUseOptimisticNewSessionFallback(error)) {
+        switchChatSession(this as Parameters<typeof switchChatSession>[0], newKey);
+        return;
+      }
+      this.lastError =
+        error instanceof Error
+          ? `Failed to create session: ${error.message}`
+          : "Failed to create session";
+      return;
+    }
+    this.lastError = "Failed to create session";
+    return;
   }
 
   handleNewSessionCancel() {
